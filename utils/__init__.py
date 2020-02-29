@@ -1,4 +1,4 @@
-from .trainer import Trainer
+from ._trainer import _Trainer
 
 __version__ = '0.1'
 __author__ = "Clemens Kriechbaumer"

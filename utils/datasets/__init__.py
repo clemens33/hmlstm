@@ -1,4 +1,4 @@
-from .text import CharactersText, CharactersPunctuation, CharactersAll
+from .text import CharactersText, CharactersPunctuation, CharactersAll, Characters, CharactersLower
 
 __version__ = '0.1'
 __author__ = "Clemens Kriechbaumer"

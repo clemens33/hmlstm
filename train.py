@@ -21,7 +21,7 @@ except:
 
 from hmlstm import HMLSTMNetwork, utils as hmlstm_utils
 from utils.datasets import CharactersText as TextDataset
-from utils.trainer import Trainer
+from utils._trainer import _Trainer
 
 #%%
 
@@ -29,7 +29,7 @@ use_cuda = torch.cuda.is_available()
 # use_cuda = False
 
 if use_cuda:
-    Trainer.print_cuda_info()
+    _Trainer.print_cuda_info()
     torch.cuda.empty_cache()
 
 device = torch.device('cuda' if use_cuda else 'cpu')
@@ -57,13 +57,13 @@ linear_sizes = [128]
 output_size = len(TextDataset.VOCABULARY)
 
 model = HMLSTMNetwork(input_size, embedding_size_input, hidden_sizes, embedding_size_output, linear_sizes, output_size)
-trainer = Trainer(model, train_loader, val_loader, device)
+trainer = _Trainer(model, train_loader, val_loader, device)
 
 #%%
 
 epoch = 200
 
-trainer.set_device(device)
+trainer.to(device)
 
 fn_save = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + str(trainer.epoch) + ".pt"
 path_states = path + "projects/" + project_name + "/states/"
@@ -149,7 +149,7 @@ trainer.plot_loss()
 
 #%%
 
-trainer.set_device("cpu")
+trainer.to("cpu")
 text = "So when I call for moratoriums and I call for"
 sampled_text, h, z = trainer.sample_text(text, length=100, k=3, online=True)
 

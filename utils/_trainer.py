@@ -1,3 +1,5 @@
+import signal
+import time
 from pathlib import Path
 from typing import Tuple
 
@@ -6,24 +8,33 @@ import torch
 import tqdm
 from torch import nn
 from torch.distributions import Multinomial
-from torch.utils.data import DataLoader
+from torch.optim.optimizer import Optimizer
+from torch.utils.data import DataLoader, Dataset, Subset
 
 from hmlstm.utils import SlopeScheduler
 
-class Trainer(object):
-    def __init__(self, model: nn.Module, train_loader: DataLoader, val_loader: DataLoader,
-                 device: torch.device = "cpu"):
 
-        self.model = model.to(device)
+class _Trainer(object):
+    def __init__(self, model: nn.Module, train_loader: DataLoader,
+                 val_loader: DataLoader, loss: nn.Module = nn.CrossEntropyLoss(),
+                 device: torch.device = "cpu", path_save: str = None, fn_save: str = None):
+
+        # TODO check if this works
+        self.exit = GracefulExit()
+        self.path_save = path_save
+        self.fn_save = fn_save
+
+        # TODO maybe add optimizer as init parameter
         self.device = device
-        self.loss = nn.CrossEntropyLoss().to(device)
+        self.model = model
+        self.loss = loss
         self.optimizer = torch.optim.Adam(model.parameters())
-        self.slope_scheduler = SlopeScheduler(model.named_parameters())
+
+        # self.slope_scheduler = SlopeScheduler(model.named_parameters())
 
         self.train_loader = train_loader
         self.val_loader = val_loader
-
-        self.dataset = train_loader.dataset
+        self.dataset = train_loader
 
         self.train_losses = {}
         self.val_losses = {}
@@ -70,7 +81,7 @@ class Trainer(object):
         print("training samples per epoch  : %d" % (N))
         print("training on samples (total) : %d" % (N * epoch))
 
-        self.set_device(self.device)
+        self.to(self.device)
         self.set_lr(lr)
         self.model.train()
 
@@ -81,16 +92,23 @@ class Trainer(object):
         pbar = tqdm.tqdm(total=(N * epoch))
         for e in range(1, epoch + 1):
 
-            vl, val_loss = self.get_validation_loss() if validate else -1
-
+            vl, val_loss = self.get_validation_loss() if validate else -1, None
             for idx, (x, y) in enumerate(self.train_loader):
+
+                if self.exit.exit_now:
+                    self.save_state(self.path_save, self.fn_save)
+
                 pbar.update(n=x.shape[0])
 
                 x = x.to(self.device)
                 y = y.to(self.device)
 
                 logits, _, _ = self.model(x)
-                train_loss = self.loss(logits.view(-1, logits.shape[2]), y.view(-1))
+
+                pred = logits.view(-1, logits.shape[2])
+                true = y.view(-1)
+
+                train_loss = self.loss(pred, true)
 
                 self.optimizer.zero_grad()
                 train_loss.backward()
@@ -106,12 +124,12 @@ class Trainer(object):
                         f"epoch: {e}/{epoch} , lr: {self.get_lr()} , train_loss: {tl:5f} , val_loss: {vl:5f}")
 
             # update the slope(a) according to the papers desc. schedule
-            self.slope_scheduler.step()
+            # self.slope_scheduler.step()
 
         # TODO some bug here epoch is not written as filename
         self.epoch += epoch
 
-    def set_device(self, device: torch.device):
+    def to(self, device: torch.device):
         self.device = device
 
         self.model.to(self.device)
@@ -196,13 +214,13 @@ class Trainer(object):
         else:
             print("cuda is not available")
 
-    @staticmethod
-    def print_cuda_info():
-        if torch.cuda.is_available():
-            for i in range(torch.cuda.device_count()):
-                print(f"cuda device: {i} / "
-                      f"name: {torch.cuda.get_device_name(i)} / "
-                      f"cuda-capability: {torch.cuda.get_device_capability(i)} / "
-                      f"memory: {torch.cuda.get_device_properties(i).total_memory / (1024 ** 3)} GB")
-        else:
-            print("cuda is not available")
+
+class GracefulExit:
+    exit_now = False
+
+    def __init__(self):
+        signal.signal(signal.SIGINT, self.exit_gracefully)
+        signal.signal(signal.SIGTERM, self.exit_gracefully)
+
+    def exit_gracefully(self, signum, frame):
+        self.exit_now = True
