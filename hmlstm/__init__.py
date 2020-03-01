@@ -1,4 +1,4 @@
-# for import in other modules
+# TODO change implementations to torchscript (performance)
 
 from .state import HMLSTMState, HMLSTMStatesList
 

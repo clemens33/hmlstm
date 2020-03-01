@@ -21,7 +21,7 @@ except:
 
 from hmlstm import HMLSTMNetwork, utils as hmlstm_utils
 from utils.datasets import CharactersText as TextDataset
-from utils._trainer import _Trainer
+from utils.trainer import Trainer
 
 #%%
 
@@ -29,7 +29,7 @@ use_cuda = torch.cuda.is_available()
 # use_cuda = False
 
 if use_cuda:
-    _Trainer.print_cuda_info()
+    Trainer.print_cuda_info()
     torch.cuda.empty_cache()
 
 device = torch.device('cuda' if use_cuda else 'cpu')
@@ -57,7 +57,7 @@ linear_sizes = [128]
 output_size = len(TextDataset.VOCABULARY)
 
 model = HMLSTMNetwork(input_size, embedding_size_input, hidden_sizes, embedding_size_output, linear_sizes, output_size)
-trainer = _Trainer(model, train_loader, val_loader, device)
+trainer = Trainer(model, train_loader, val_loader, device)
 
 #%%
 
@@ -68,7 +68,7 @@ trainer.to(device)
 fn_save = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + str(trainer.epoch) + ".pt"
 path_states = path + "projects/" + project_name + "/states/"
 
-trainer.train(epoch=epoch, lr=0.01, validate=True)
+trainer.train(epochs=epoch, lr=0.01, validate=True)
 trainer.save_state(path_states, fn_save)
 
 #%%
