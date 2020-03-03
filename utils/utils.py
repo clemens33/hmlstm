@@ -88,6 +88,7 @@ class SimpleEarlyStopping(object):
     def __init__(self, patience: int = 10, delta: float = .0, verbose: bool = False) -> None:
         super().__init__()
 
+        #self.max = patience
         self.patience = patience
         self.delta = delta
         self.min_loss = float("inf")
@@ -96,6 +97,9 @@ class SimpleEarlyStopping(object):
     def __call__(self, loss: torch.Tensor, save_checkpoint: Callable = None) -> bool:
         if self._check(loss):
             self.min_loss = loss
+
+            #if self.patience < self.max:
+            #    self.patience += 1
 
             if save_checkpoint is not None:
                 save_checkpoint()

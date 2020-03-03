@@ -10,6 +10,10 @@ from torch.utils.data import DataLoader
 
 from .utils import SMAEarlyStopping, is_notebook
 
+if is_notebook():
+    from tqdm.notebook import tqdm_notebook as tqdm
+else:
+    from tqdm import tqdm
 
 class Trainer(object):
     def __init__(self, model: nn.Module, train_loader: DataLoader,
@@ -83,7 +87,7 @@ class Trainer(object):
         self.val_losses = {}
 
         # TODO check notebook tqdm
-        pbar = tqdm.notebook.tqdm(total=(updates)) if is_notebook() else tqdm.tqdm(total=(updates))
+        pbar = tqdm(total=updates)
 
         for e in range(1, epochs + 1):
             for idx, (x, y) in enumerate(self.train_loader):
@@ -98,18 +102,11 @@ class Trainer(object):
                 true = y.view(-1)
 
                 train_loss = self.loss(pred, true)
+                tl = train_loss.data
 
                 if not idx % log_interval or idx == 0:
                     val_loss = self.get_val_loss(self.val_loader) if validate else None
-
-                    tl = train_loss.data
                     vl = val_loss.data if validate else -1
-
-                    self.train_losses[pbar.n] = tl
-                    self.val_losses[pbar.n] = vl
-
-                    pbar.set_postfix_str(
-                        f"epoch: {e}/{epochs} , lr: {self.get_lr()} , train_loss: {tl:5f} , val_loss: {vl:5f}")
 
                     if self.stop_early(vl):
                         self.save_state(self.path,
@@ -122,9 +119,14 @@ class Trainer(object):
                 train_loss.backward()
                 self.optimizer.step()
 
+                self.train_losses[pbar.n] = tl
+                self.val_losses[pbar.n] = vl
+
                 pbar.set_postfix_str(
                     f"epoch: {e}/{epochs} , lr: {self.get_lr()} , train_loss: {tl:5f} , val_loss: {vl:5f}")
                 pbar.update()
+
+        pbar.close()
 
         self.save_state(self.path,
                         "vl_" + str(round(float(vl), 6)) + "_upd_" + str(pbar.n) + "_lr_" + str(self.get_lr()))
