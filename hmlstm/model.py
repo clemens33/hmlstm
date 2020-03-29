@@ -4,17 +4,18 @@ import torch
 import torch.distributions
 from torch import nn
 
-from hmlstm import HMLSTMCell, HMLSTMState, HMLSTMStatesList
+from hmlstm import LayerNormHMLSTMCell, HMLSTMCell, HMLSTMState, HMLSTMStatesList
 
 
 class HMLSTM(nn.Module):
-    def __init__(self, input_size: int, hidden_sizes: List[int], bias: List[bool] = None):
+    def __init__(self, input_size: int, hidden_sizes: List[int], bias: List[bool] = None, layer_norm: bool = False):
         super(HMLSTM, self).__init__()
 
         self.num_layers = len(hidden_sizes)
         self.input_size = input_size
         self.hidden_sizes = hidden_sizes
         self.bias = [True for _ in hidden_sizes] if bias is None else bias
+        self.layer_norm = layer_norm
 
         self.cells = nn.ModuleList()
 
@@ -22,7 +23,10 @@ class HMLSTM(nn.Module):
             hidden_size_top = 1 if l + 1 == self.num_layers else hidden_sizes[l + 1]
             hidden_size_bottom = input_size if l == 0 else hidden_sizes[l - 1]
 
-            self.cells.append(HMLSTMCell(hidden_size_bottom, hidden_size, hidden_size_top, self.bias[l]))
+            if layer_norm:
+                self.cells.append(LayerNormHMLSTMCell(hidden_size_bottom, hidden_size, hidden_size_top, self.bias[l]))
+            else:
+                self.cells.append(HMLSTMCell(hidden_size_bottom, hidden_size, hidden_size_top, self.bias[l]))
 
     def get_device(self) -> torch.device:
         return next(self.cells[0].parameters()).device
@@ -45,13 +49,13 @@ class HMLSTM(nn.Module):
 
     def forward(self, input: torch.Tensor, states: List[HMLSTMState] = None) -> Tuple[
         List[torch.Tensor], HMLSTMStatesList]:
-        batch, seq_len, input_size = input.size()
+        batch_size, seq_len, input_size = input.size()
 
         # states per layer at one element in the seq
-        states = [self.init_state(batch, l=l) for l in range(self.num_layers)] if states is None else states
+        states = [self.init_state(batch_size, l=l) for l in range(self.num_layers)] if states is None else states
 
-        hidden_states = []
-        z_states = []
+        hidden_states = torch.zeros(batch_size, seq_len, sum(self.hidden_sizes), device=input.device)
+        z_states = torch.zeros(batch_size, seq_len, len(self.hidden_sizes), device=input.device)
 
         for t in range(seq_len):
 
@@ -71,17 +75,10 @@ class HMLSTM(nn.Module):
                     states[l - 1].h_top = h
 
             # TODO check if cat places layers in reversed order
-            h_layers = torch.cat([state.h for state in states], dim=1)
-            z_layers = torch.cat([state.z for state in states], dim=1)
+            hidden_states[:, t] = torch.cat([state.h for state in states], dim=1)
+            z_states[:, t] = torch.cat([state.z for state in states], dim=1)
 
-            hidden_states.append(h_layers)
-            z_states.append(z_layers)
+        return hidden_states, z_states
 
-            # hidden_states.append([state.h for state in states])
-            # z_states.append([state.z for state in states])
 
-        h_all = torch.stack(hidden_states, dim=1)
-        z_all = torch.stack(z_states, dim=1)
 
-        # return hidden_states, z_states
-        return h_all, z_all

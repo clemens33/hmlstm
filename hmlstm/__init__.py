@@ -6,7 +6,7 @@ from .state import HMLSTMState, HMLSTMStatesList
 from .utils import Round1 as Round, HardSigm1 as HardSigm, SlopeScheduler
 
 # define which version is active
-from .cell import HMLSTMCell2 as HMLSTMCell
+from .cell import HMLSTMCell4 as LayerNormHMLSTMCell, HMLSTMCell2 as HMLSTMCell
 
 from .model import HMLSTM
 from .output import HMLSTMOutput

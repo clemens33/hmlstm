@@ -21,8 +21,8 @@ except:
 
 
 from utils.datasets import Characters as TextDataset
-from utils import Trainer, print_cuda_info
-from models.baseline import BaselineNetwork
+from utils import LSTMTrainer as Trainer, print_cuda_info
+from lstm.network import BaselineLSTM
 
 # %%
 
@@ -49,20 +49,21 @@ dataset = TextDataset(path_data + "data.txt", seq_length)
 train_dataset, valid_dataset = dataset.split()
 
 batch_size_train = 64
-batch_size_valid = int(len(valid_dataset)/4) + 1
+#batch_size_valid = int(len(valid_dataset)/4) + 1
+batch_size_valid = 1000
 train_loader = DataLoader(train_dataset, batch_size=batch_size_train, shuffle=True, pin_memory=use_cuda)
 valid_loader = DataLoader(valid_dataset, batch_size=batch_size_valid, shuffle=True, pin_memory=use_cuda)
 
 # %%
 
 input_size = 1
-embedding_size = 64
-hidden_sizes = [512]
+embedding_size = 77
+hidden_sizes = [256, 255, 256]
 linear_sizes = []
-output_size = len(dataset._vocabulary)
+output_size = dataset.vocab_len()
 
 
-model = BaselineNetwork(input_size, embedding_size, hidden_sizes, output_size, linear_sizes, layer_norm=True)
+model = BaselineLSTM(input_size, embedding_size, hidden_sizes, output_size, linear_sizes, layer_norm=False)
 trainer = Trainer(model, train_loader, valid_loader, device=device, path=path_states)
 
 # %%
@@ -70,8 +71,10 @@ trainer = Trainer(model, train_loader, valid_loader, device=device, path=path_st
 epochs = 10
 
 trainer.to(device)
-trainer.train(epochs=epochs, lr=0.0033711140314979095, log_interval=10, validate=True)
+vl = trainer.train(epochs=epochs, lr=0.001527, log_interval=1, validate=False)
 
 trainer.plot_loss()
+
+print(vl)
 
 # %%

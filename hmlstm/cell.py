@@ -8,17 +8,41 @@ from torch.nn import Parameter, init
 from hmlstm import HMLSTMState, HardSigm, Round
 
 
-class HMLSTMCell1(nn.Module):
+class _HMLSTMCell(nn.Module):
     _num_chunks = 4
 
-    def __init__(self, input_bottom_size: int, hidden_size: int, input_top_size: int, bias: bool = True):
-
-        super(HMLSTMCell1, self).__init__()
+    def __init__(self, input_bottom_size: int, hidden_size: int, input_top_size: int, bias: bool = True) -> None:
+        super(_HMLSTMCell, self).__init__()
 
         self.input_bottom_size = input_bottom_size
         self.hidden_size = hidden_size
         self.input_top_size = input_top_size
         self.bias = bias
+
+        self.calc_z = _CalcZ()
+
+    def reset_parameters(self):
+        sd = 1.0 / math.sqrt(self.hidden_size)
+        for p in self.parameters():
+            if p.requires_grad:
+                init.uniform_(p, -sd, sd)
+
+    def reset_parameters2(self):
+        for p in self.parameters():
+            if p.requires_grad and p.ndim > 1:
+
+                init.kaiming_uniform_(p)
+
+
+class HMLSTMCell1(_HMLSTMCell):
+    """
+    hmlstm cell version which resembles the original paper the most but is least optimized
+    idea is really to calculate based on the corresponding boundaries for each sample in the batch the appropriate
+    operation. Unfortunately this turns out to be slow.
+    """
+
+    def __init__(self, input_bottom_size: int, hidden_size: int, input_top_size: int, bias: bool = True):
+        super(HMLSTMCell1, self).__init__(input_bottom_size, hidden_size, input_top_size, bias)
 
         self.U = nn.ParameterList()
         self.R = nn.ParameterList()
@@ -32,8 +56,6 @@ class HMLSTMCell1(nn.Module):
         self.R.append(Parameter(torch.Tensor(hidden_size, 1)))
         self.W.append(Parameter(torch.Tensor(input_bottom_size, 1)))
 
-        self.calc_z = _CalcZ()
-
         if bias:
             self.b = nn.ParameterList()
             [self.b.append(Parameter(torch.Tensor(hidden_size, ))) for _ in range(self._num_chunks)]
@@ -43,12 +65,7 @@ class HMLSTMCell1(nn.Module):
 
         self.reset_parameters()
 
-    def reset_parameters(self):
-        sd = 1.0 / math.sqrt(self.hidden_size)
-        for p in self.parameters():
-            if p.requires_grad:
-                init.uniform_(p, -sd, sd)
-
+    # TODO rewrite to single matrix for R, W, and U including samples indexing for diff operations
     def calc_gates(self, input: HMLSTMState, idx: torch.Tensor, gates: List[int] = [0, 1, 2, 3, 4]) -> Tuple[
         torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
 
@@ -122,24 +139,17 @@ class HMLSTMCell1(nn.Module):
         return h, c, z
 
 
-class HMLSTMCell2(nn.Module):
-    _num_chunks = 4
+class HMLSTMCell2(_HMLSTMCell):
+    """
+    fastest version (what I tried of the hmlstm cell)
+    """
 
-    def __init__(self, input_bottom_size: int, hidden_size: int, input_top_size: int, bias: bool = True, a: int = 7,
-                 th: float = 0.5):
-
-        super(HMLSTMCell2, self).__init__()
-
-        self.input_bottom_size = input_bottom_size
-        self.hidden_size = hidden_size
-        self.input_top_size = input_top_size
-        self.bias = bias
+    def __init__(self, input_bottom_size: int, hidden_size: int, input_top_size: int, bias: bool = True):
+        super(HMLSTMCell2, self).__init__(input_bottom_size, hidden_size, input_top_size, bias)
 
         self.U = Parameter(torch.Tensor(input_top_size, (self._num_chunks * hidden_size) + 1))
         self.R = Parameter(torch.Tensor(hidden_size, (self._num_chunks * hidden_size) + 1))
         self.W = Parameter(torch.Tensor(input_bottom_size, (self._num_chunks * hidden_size) + 1))
-
-        self.calc_z = _CalcZ()
 
         if bias:
             self.b = Parameter(torch.Tensor(((self._num_chunks * hidden_size) + 1), ))
@@ -147,12 +157,6 @@ class HMLSTMCell2(nn.Module):
             self.register_parameter('b', None)
 
         self.reset_parameters()
-
-    def reset_parameters(self):
-        sd = 1.0 / math.sqrt(self.hidden_size)
-        for p in self.parameters():
-            if p.requires_grad:
-                init.uniform_(p, -sd, sd)
 
     def calc_gates(self, input: HMLSTMState):
 
@@ -174,7 +178,7 @@ class HMLSTMCell2(nn.Module):
 
         return i, g, o, f, sz
 
-    def forward(self, input: HMLSTMState, **kwargs):
+    def forward(self, input: HMLSTMState):
 
         i, g, o, f, sz = self.calc_gates(input)
 
@@ -199,24 +203,18 @@ class HMLSTMCell2(nn.Module):
         return h, c, z
 
 
-class HMLSTMCell3(nn.Module):
-    _num_chunks = 4
+class HMLSTMCell3(_HMLSTMCell):
+    """
+    another version of the hmlstm cell - not quite as fast - doesn't use torch where or indexing
+    """
 
     def __init__(self, input_bottom_size: int, hidden_size: int, input_top_size: int, bias: bool = True, a: int = 7,
                  th: float = 0.5):
-
-        super(HMLSTMCell3, self).__init__()
-
-        self.input_bottom_size = input_bottom_size
-        self.hidden_size = hidden_size
-        self.input_top_size = input_top_size
-        self.bias = bias
+        super(HMLSTMCell3, self).__init__(input_bottom_size, hidden_size, input_top_size, bias)
 
         self.U = Parameter(torch.Tensor(input_top_size, (self._num_chunks * hidden_size) + 1))
         self.R = Parameter(torch.Tensor(hidden_size, (self._num_chunks * hidden_size) + 1))
         self.W = Parameter(torch.Tensor(input_bottom_size, (self._num_chunks * hidden_size) + 1))
-
-        self.calc_z = _CalcZ()
 
         if bias:
             self.b = Parameter(torch.Tensor(((self._num_chunks * hidden_size) + 1), ))
@@ -224,12 +222,6 @@ class HMLSTMCell3(nn.Module):
             self.register_parameter('b', None)
 
         self.reset_parameters()
-
-    def reset_parameters(self):
-        sd = 1.0 / math.sqrt(self.hidden_size)
-        for p in self.parameters():
-            if p.requires_grad:
-                init.uniform_(p, -sd, sd)
 
     def calc_gates(self, input: HMLSTMState):
 
@@ -249,7 +241,7 @@ class HMLSTMCell3(nn.Module):
 
         return i, g, o, f, sz
 
-    def forward(self, input: HMLSTMState, **kwargs):
+    def forward(self, input: HMLSTMState):
 
         i, g, o, f, sz = self.calc_gates(input)
 
@@ -267,6 +259,75 @@ class HMLSTMCell3(nn.Module):
         return h, c, z
 
 
+class HMLSTMCell4(HMLSTMCell2):
+    """
+    layer norm version of the hmlstm cell
+
+    idea based on the official pytorch fast rnn benchmark lstm cell layer norm implementation
+    https://github.com/pytorch/pytorch/blob/master/benchmarks/fastrnns/custom_lstms.py
+    I'm not sure why they add layernorm for the recurrent and the incoming pre activations
+    """
+
+    def __init__(self, input_bottom_size: int, hidden_size: int, input_top_size: int, bias: bool = True):
+        super(HMLSTMCell4, self).__init__(input_bottom_size, hidden_size, input_top_size, bias)
+
+        # self.ln_bottomup = nn.LayerNorm(self._num_chunks * hidden_size + 1)
+        self.ln_bottomup = nn.Identity()
+
+        # self.ln_recurent = nn.LayerNorm(self._num_chunks * hidden_size + 1)
+        self.ln_recurent = nn.Identity()
+
+        # TODO check - if layer norm is applied to the top down connection separately gradients are nan ???
+        # self.ln_topdown = nn.LayerNorm(self._num_chunks * hidden_size + 1)
+        self.ln_topdown = nn.Identity()
+
+        self.ln_s = nn.LayerNorm(self._num_chunks * hidden_size + 1)
+        # self.ln_s = nn.Identity()
+
+        self.ln_c = nn.LayerNorm(hidden_size)
+        # self.ln_c = nn.Identity()
+
+    def calc_gates(self, input: HMLSTMState):
+        s_bottomup = self.ln_bottomup((input.h_bottom * input.z_bottom) @ self.W)
+        s_recurrent = self.ln_recurent(input.h @ self.R)
+        s_topdown = self.ln_topdown((input.h_top * input.z) @ self.U)
+
+        s = self.ln_s(s_bottomup + s_recurrent + s_topdown) + self.b
+
+        split_sections = [self.hidden_size if i < self._num_chunks else 1 for i in range(self._num_chunks + 1)]
+        si, sg, so, sf, sz = torch.split(s, split_sections, dim=1)
+
+        i = torch.sigmoid(si)
+        g = torch.tanh(sg)
+        o = torch.sigmoid(so)
+        f = torch.sigmoid(sf)
+
+        return i, g, o, f, sz
+
+    def forward(self, input: HMLSTMState):
+        i, g, o, f, sz = self.calc_gates(input)
+
+        c = torch.where(
+            torch.eq(input.z, 1),
+            self.ln_c(i * g),  # flush
+            torch.where(
+                torch.eq(input.z_bottom, 0),
+                input.c,  # copy
+                self.ln_c(input.c * f + i * g)  # update
+            )
+        )
+
+        h = torch.where(
+            torch.eq(input.z, 0) & torch.eq(input.z_bottom, 0),
+            input.h,  # copy
+            torch.tanh(c) * o  # update / flash
+        )
+
+        z = self.calc_z(sz)
+
+        return h, c, z
+
+
 class _CalcZ(nn.Module):
     def __init__(self, a: int = 1, th: float = 0.5):
         super(_CalcZ, self).__init__()
@@ -277,5 +338,7 @@ class _CalcZ(nn.Module):
     def forward(self, sz: torch.Tensor) -> torch.Tensor:
         z_tilde = self.hardsigm(sz)
         z = self.round(z_tilde)
+
+        #z = torch.sigmoid(sz)
 
         return z

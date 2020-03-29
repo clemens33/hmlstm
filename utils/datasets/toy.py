@@ -3,7 +3,7 @@ from typing import Tuple
 import torch
 from torch.utils.data import Dataset
 
-
+# TODO finish (not done or tested yet)
 class Numbers(Dataset):
 
     def __init__(self, length: int, seq_length: int, step_size: int = None, device: torch.device = "cpu"):

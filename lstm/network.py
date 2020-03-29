@@ -7,10 +7,10 @@ from torch import nn
 from lstm import LayerNormLSTM, LayerLSTM
 
 
-class BaselineNetwork(nn.Module):
-    def __init__(self, input_size: int, embedding_size: int, hidden_sizes: int, output_size: int,
+class BaselineLSTM(nn.Module):
+    def __init__(self, input_size: int, embedding_size: int, hidden_sizes: List[int], output_size: int,
                  linear_sizes: List[int] = None, layer_norm: bool = False):
-        super(BaselineNetwork, self).__init__()
+        super(BaselineLSTM, self).__init__()
 
         self.input_size = input_size
         self.embedding_size = embedding_size
@@ -60,8 +60,8 @@ class BaselineNetwork(nn.Module):
         :return:
         """
         emb = self.embedding(input)
-        h, _ = self.lstm(emb)
+        h, state = self.lstm(emb)
         fc = self.fc(h)
         out = self.output(fc)
 
-        return out, None
+        return out, state

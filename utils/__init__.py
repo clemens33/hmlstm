@@ -1,4 +1,4 @@
-from .trainer import Trainer
+from ._trainer import _Trainer, HMLSTMTrainer, LSTMTrainer
 from .utils import *
 
 

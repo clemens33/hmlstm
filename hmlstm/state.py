@@ -17,10 +17,12 @@ class HMLSTMState:
     def __post_init__(self):
         self.to(self.device)
 
-    def to(self, device: torch.device = torch.device("cpu")):
+
+    def to(self, device: torch.device = "cpu"):
         for k, t in self.__dict__.items():
             if isinstance(t, torch.Tensor):
                 self.__dict__[k] = t.to(device)
+
 
 # TODO better state handling and returns in network.py and model.py
 class HMLSTMStatesList(list):

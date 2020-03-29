@@ -50,7 +50,7 @@ class LayerNormLSTM(torch.jit.ScriptModule):
         return torch.stack(hidden_states, dim=1), torch.stack(cell_states, dim=1)
 
 
-class LayerLSTM(jit.ScriptModule):
+class LayerLSTM(nn.Module):
     def __init__(self, input_size: int, hidden_sizes: List[int]) -> None:
         super(LayerLSTM, self).__init__()
 
@@ -64,31 +64,32 @@ class LayerLSTM(jit.ScriptModule):
 
             self.cells.append(nn.LSTMCell(hidden_size_before, hidden_sizes[l]))
 
-    # TODO maybe add a version where a input state can be passed into and are returned
-    @torch.jit.script_method
-    def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    # TODO test state parameter usage
+    def forward(self, input: torch.Tensor, state: Tuple[List[torch.Tensor], List[torch.Tensor]] = None) -> Tuple[
+        torch.Tensor, torch.Tensor]:
         batch_size, seq_len, input_size = input.size()
 
-        jit.annotate()
+        if state is None:
+            h_prev = [torch.zeros(batch_size, hidden_size, device=input.device) for hidden_size in self.hidden_sizes]
+            c_prev = [torch.zeros(batch_size, hidden_size, device=input.device) for hidden_size in self.hidden_sizes]
+        else:
+            h_prev, c_prev = state
 
-        h_prev = [torch.zeros(batch_size, hidden_size, device=input.device) for hidden_size in self.hidden_sizes]
-        c_prev = [torch.zeros(batch_size, hidden_size, device=input.device) for hidden_size in self.hidden_sizes]
-
-        hidden_states = []
-        cell_states = []
+        hidden_states = torch.zeros(batch_size, seq_len, self.hidden_sizes[-1], device=input.device)
+        cell_states = torch.zeros(batch_size, seq_len, self.hidden_sizes[-1], device=input.device)
 
         for t in range(seq_len):
 
             h = input[:, t]
             for l, cell in enumerate(self.cells):
-                state = (h_prev[l], c_prev[l])
+                s = (h_prev[l], c_prev[l])
 
-                h, c = cell(h, state)
+                h, c = cell(h, s)
 
                 h_prev[l] = h
                 c_prev[l] = c
 
-            hidden_states += [h]
-            cell_states += [c]
+            hidden_states[:, t] = h
+            cell_states[:, t] = c
 
-        return torch.stack(hidden_states, dim=1), torch.stack(cell_states, dim=1)
+        return hidden_states, cell_states

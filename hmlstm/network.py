@@ -10,7 +10,7 @@ class HMLSTMNetwork(nn.Module):
     # TODO hinting for embedding_size_input - int | List[int]
     def __init__(self, input_size: int, embedding_size_input, hidden_sizes: List[int],
                  embedding_size_output: int,
-                 linear_sizes: List[int], output_size: int):
+                 linear_sizes: List[int], output_size: int, layer_norm: bool = False):
         super(HMLSTMNetwork, self).__init__()
 
         self.num_layers = len(hidden_sizes)
@@ -20,6 +20,7 @@ class HMLSTMNetwork(nn.Module):
         self.embedding_size_output = embedding_size_output
         self.linear_sizes = linear_sizes
         self.output_size = output_size
+        self.layer_norm = layer_norm
 
         # generic input layers
         if isinstance(embedding_size_input, list):
@@ -33,10 +34,11 @@ class HMLSTMNetwork(nn.Module):
             # input layer for index based embeddings (e.g. characters)
             self.embedding = nn.Embedding(output_size, embedding_size_input)
 
-        self.hmlstm = HMLSTM(embedding_size_input, hidden_sizes)
-        self.output = HMLSTMOutput(embedding_size_output, hidden_sizes, linear_sizes, output_size)
+        self.hmlstm = HMLSTM(embedding_size_input, hidden_sizes, layer_norm=layer_norm)
+        self.output = HMLSTMOutput(embedding_size_output, hidden_sizes, linear_sizes, output_size,
+                                   layer_norm=layer_norm)
 
-        # self.output = nn.Linear(hidden_sizes[-1], output_size)
+        #self.output = nn.Linear(hidden_sizes[-1], output_size)
 
     def fnn(self, input: torch.Tensor, activation: Callable = torch.tanh) -> torch.Tensor:
         out = input
@@ -48,14 +50,10 @@ class HMLSTMNetwork(nn.Module):
 
         return out
 
-    def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        # TODO why (batch, seq, 1!!!, emb)
+    def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+
         emb = self.embedding(input)
-
-        batch, seq_len, _, input_size = emb.size()
-        emb = emb.view(batch, seq_len, -1)
-
         h, z = self.hmlstm(emb)
         out = self.output(h)
 
-        return out, h, z
+        return out, (h, z)
