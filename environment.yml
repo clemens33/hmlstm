@@ -1,0 +1,9 @@
+name: hmlstm
+channels:
+  - pytorch
+dependencies:
+  - pytorch
+  - cudatoolkit=10.2
+  - pip
+  - pip:
+      - ax-platform==0.1.12

@@ -1,5 +1,0 @@
-embedding_size_input = 128
-hidden_sizes = [256, 128, 64]
-
-embedding_size_output = 256
-linear_sizes = [128]

@@ -1,7 +1,0 @@
-
-Größerer Datensatz (Shakespeare)
-Hyperparameter Tuning (Kann auch manuell sein) + Layernorm
-Metrik (Eventuell Cross-Entropy auf Lehrzeichen/Wortanfang/Wortende)
-Baseline (Single Layer LSTM mit ca. gleich vielen Parametern)
-Für Präsentation: Z Problematik eingehen
-Visualisierung von speziellen Beispielen (e.g. Trichter & Pyramide) -> Eher interessant wie Information gehandhapt wird.

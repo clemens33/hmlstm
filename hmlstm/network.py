@@ -1,4 +1,4 @@
-from typing import List, Tuple, Callable
+from typing import List, Tuple, Callable, Union
 
 import torch
 from torch import nn
@@ -8,7 +8,7 @@ from hmlstm import HMLSTM, HMLSTMOutput
 
 class HMLSTMNetwork(nn.Module):
     # TODO hinting for embedding_size_input - int | List[int]
-    def __init__(self, input_size: int, embedding_size_input, hidden_sizes: List[int],
+    def __init__(self, input_size: int, embedding_size_input: Union[int, List[int]], hidden_sizes: List[int],
                  embedding_size_output: int,
                  linear_sizes: List[int], output_size: int, layer_norm: bool = False):
         super(HMLSTMNetwork, self).__init__()
@@ -38,7 +38,7 @@ class HMLSTMNetwork(nn.Module):
         self.output = HMLSTMOutput(embedding_size_output, hidden_sizes, linear_sizes, output_size,
                                    layer_norm=layer_norm)
 
-        #self.output = nn.Linear(hidden_sizes[-1], output_size)
+        # self.output = nn.Linear(hidden_sizes[-1], output_size)
 
     def fnn(self, input: torch.Tensor, activation: Callable = torch.tanh) -> torch.Tensor:
         out = input
